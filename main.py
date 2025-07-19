@@ -3,18 +3,18 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 import pandas as pd
 import plotly.express as px
 import numpy as np
-from google.cloud import firestore
+from google.cloud import firestore, storage
 import uuid
 import io
-import os
 from datetime import datetime
 import json
+import os
 from google.oauth2 import service_account
 
 # Глобальная константа для секретного кода
 SECRET_CODE = "1701"
 
-# Инициализация Firestore
+# Инициализация Firestore и GCS
 try:
     gcp_service_account_info_json_str = os.environ.get("GCP_SERVICE_ACCOUNT_KEY")
     if not gcp_service_account_info_json_str:
@@ -22,13 +22,15 @@ try:
     gcp_service_account_info = json.loads(gcp_service_account_info_json_str)
     credentials = service_account.Credentials.from_service_account_info(gcp_service_account_info)
     db = firestore.Client(credentials=credentials, database='superpcdatab')
-    print("Firestore client initialized using environment variable on Render.")
+    storage_client = storage.Client(credentials=credentials)
+    bucket_name = "supercomputer-graphs-123"  # Замени на имя твоего бакета
+    bucket = storage_client.bucket(bucket_name)
+    print("Firestore and GCS clients initialized.")
 except Exception as e:
-    print(f"FATAL ERROR: Could not initialize Firestore client: {e}")
-    raise Exception(f"Failed to initialize Firestore: {e}. Ensure GCP_SERVICE_ACCOUNT_KEY env var is set correctly.")
+    print(f"FATAL ERROR: Could not initialize clients: {e}")
+    raise Exception(f"Failed to initialize: {e}. Ensure GCP_SERVICE_ACCOUNT_KEY env var is set.")
 
 collection = db.collection('supercomputer_graphs')
-
 app = FastAPI()
 
 @app.get("/", response_class=HTMLResponse)
@@ -36,40 +38,40 @@ async def get_home():
     image_url1 = "https://previews.dropbox.com/p/thumb/ACsXIJT6uDu3_9KF1hr8G0MW90EFfUZH1nfIjdZCqgmVEqfr41XrwcPUuah8TnkAu64d9LoQ4LxLq8Pv_C38A44qB6L2jGhSXWUi1ZxKjEfxXl5DSrH7X_2tJ1q0rHf7kJwsCAgZbKhSFEmiHWwklx3oXUHaMeKW0gFg6EQNb5Gy09keMAezN8TPgXishPeEesLpbRgUVXDecdbAIYSabJND6u6VcAHsVixsyZ2ITFZE5YNXS_AJaKi2fRFtd8OFOUMwPz56BkTcOnwiulsYerjTCUCJ8cVTdY7aOzfOqxYqVfBJXXRup7t11rsEkZrIk9A/p.png"
     image_url2 = "https://previews.dropbox.com/p/thumb/ACvr2J7HqCiwFEp0LlCa55sCjdwUd_6XszKMD0kBcbjuSbxaWYHMuhITYEcVATsZNlNPOEX4mXANgJ_2ZwcZeGn9iPyubpllPLiWHkN60b0A9jSJRyCOMpcrwkzNqY0frwIpPvI8YNecE2sUElA5bcVLANYIrt-MYCiCy9E_6r7h6LABMArCl0LV-SNi-dttrGv0FTe-Uv40zL-JoFaAMB7yyL1FQTiv-5Mmi4Aeeu9ucgIJ-tnM_64k6-mXrICOS7VMTOkX7kliBSj_6jge1GgsnCxX_798GwNbDioQxdNdc8uGe3cKnK2PDZmvsXs6VH4D-TVP6djK27PgEYIsPoh5/p.png"
 
-    html_header = f"""
+    html_header = """
     <html>
         <head>
             <title>Supercomputer Graphs</title>
             <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
             <style>
-                body {{ background-color: #f8f9fa; color: #343a40; }}
-                .container {{ max-width: 960px; margin: auto; padding: 20px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }}
-                h1, h2 {{ color: #007bff; margin-bottom: 20px; }}
-                .form-control {{ border-radius: 5px; }}
-                .btn-primary {{ background-color: #007bff; border-color: #007bff; transition: background-color 0.3s ease; }}
-                .btn-primary:hover {{ background-color: #0056b3; border-color: #0056b3; }}
-                .image-container {{ display: flex; justify-content: center; margin-top: 20px; flex-wrap: wrap; }}
-                .image-item, .graph-item {{ max-width: 45%; height: auto; margin: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: transform 0.2s ease; cursor: pointer; }}
-                .image-item:hover, .graph-item:hover {{ transform: scale(1.02); }}
-                .modal {{ display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100vh; background-color: rgba(0, 0, 0, 0.9); justify-content: center; align-items: center; z-index: 1050; }}
-                .modal-content {{ width: auto; height: auto; max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 8px; background-color: transparent; }}
-                .modal-graph {{ width: 100%; height: 100%; border: none; }}
-                .list-group-item {{ background-color: #e9ecef; border: 1px solid #dee2e6; margin-bottom: 5px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; }}
-                .list-group-item a {{ color: #007bff; text-decoration: none; font-weight: bold; flex-grow: 1; padding: 10px 15px; }}
-                .list-group-item a:hover {{ text-decoration: underline; }}
-                .modal-buttons {{ position: absolute; top: 50%; width: 100%; display: flex; justify-content: space-between; padding: 0 20px; z-index: 1060; }}
-                .modal-buttons button {{ background: rgba(0,0,0,0.5); border: none; color: white; cursor: pointer; padding: 15px; border-radius: 50%; font-size: 20px; transition: background-color 0.3s ease; }}
-                .modal-buttons button:hover {{ background: rgba(0,0,0,0.8); }}
-                .close-button {{ position: absolute; top: 20px; right: 30px; color: white; font-size: 35px; font-weight: bold; cursor: pointer; z-index: 1060; }}
-                .close-button:hover, .close-button:focus {{ color: #bbb; text-decoration: none; cursor: pointer; }}
-                .code-modal-content {{ background-color: #fefefe; margin: auto; padding: 30px; border: 1px solid #888; width: 80%; max-width: 400px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); text-align: center; position: relative; }}
-                .code-modal-content h3 {{ color: #343a40; margin-bottom: 20px; }}
-                .code-modal-content input[type="password"] {{ width: calc(100% - 20px); padding: 10px; margin-bottom: 15px; border: 1px solid #ced4da; border-radius: 5px; text-align: center; font-size: 1.2em; }}
-                .code-modal-content button {{ background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; transition: background-color 0.3s ease; }}
-                .code-modal-content button:hover {{ background-color: #218838; }}
-                .code-modal-error {{ color: #dc3545; margin-top: 10px; font-size: 0.9em; }}
-                .delete-btn {{ background-color: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8em; margin-left: 10px; transition: background-color 0.3s ease; }}
-                .delete-btn:hover {{ background-color: #c82333; }}
+                body { background-color: #f8f9fa; color: #343a40; }
+                .container { max-width: 960px; margin: auto; padding: 20px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+                h1, h2 { color: #007bff; margin-bottom: 20px; }
+                .form-control { border-radius: 5px; }
+                .btn-primary { background-color: #007bff; border-color: #007bff; transition: background-color 0.3s ease; }
+                .btn-primary:hover { background-color: #0056b3; border-color: #0056b3; }
+                .image-container { display: flex; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
+                .image-item, .graph-item { max-width: 45%; height: auto; margin: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: transform 0.2s ease; cursor: pointer; }
+                .image-item:hover, .graph-item:hover { transform: scale(1.02); }
+                .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100vh; background-color: rgba(0, 0, 0, 0.9); justify-content: center; align-items: center; z-index: 1050; }
+                .modal-content { width: auto; height: auto; max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 8px; background-color: transparent; }
+                .modal-graph { width: 100%; height: 100%; border: none; }
+                .list-group-item { background-color: #e9ecef; border: 1px solid #dee2e6; margin-bottom: 5px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; }
+                .list-group-item a { color: #007bff; text-decoration: none; font-weight: bold; flex-grow: 1; padding: 10px 15px; }
+                .list-group-item a:hover { text-decoration: underline; }
+                .modal-buttons { position: absolute; top: 50%; width: 100%; display: flex; justify-content: space-between; padding: 0 20px; z-index: 1060; }
+                .modal-buttons button { background: rgba(0,0,0,0.5); border: none; color: white; cursor: pointer; padding: 15px; border-radius: 50%; font-size: 20px; transition: background-color 0.3s ease; }
+                .modal-buttons button:hover { background: rgba(0,0,0,0.8); }
+                .close-button { position: absolute; top: 20px; right: 30px; color: white; font-size: 35px; font-weight: bold; cursor: pointer; z-index: 1060; }
+                .close-button:hover, .close-button:focus { color: #bbb; text-decoration: none; cursor: pointer; }
+                .code-modal-content { background-color: #fefefe; margin: auto; padding: 30px; border: 1px solid #888; width: 80%; max-width: 400px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); text-align: center; position: relative; }
+                .code-modal-content h3 { color: #343a40; margin-bottom: 20px; }
+                .code-modal-content input[type="password"] { width: calc(100% - 20px); padding: 10px; margin-bottom: 15px; border: 1px solid #ced4da; border-radius: 5px; text-align: center; font-size: 1.2em; }
+                .code-modal-content button { background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; transition: background-color 0.3s ease; }
+                .code-modal-content button:hover { background-color: #218838; }
+                .code-modal-error { color: #dc3545; margin-top: 10px; font-size: 0.9em; }
+                .delete-btn { background-color: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8em; margin-left: 10px; transition: background-color 0.3s ease; }
+                .delete-btn:hover { background-color: #c82333; }
             </style>
         </head>
         <body>
@@ -135,7 +137,7 @@ async def get_home():
             </div>
 
             <script>
-                let graphIds = """ + str(graph_ids) + """;
+                let graphIds = """ + json.dumps(graph_ids) + """;
                 let currentGraphIndex = 0;
                 let currentAction = null;
                 let currentGraphToDeleteId = null;
@@ -362,17 +364,26 @@ async def upload_file(file: UploadFile = File(...), code: str = Form(...)):
         fig.update_traces(textposition='top center')
         fig.update_yaxes(type='log', range=[np.log10(0.1), np.log10(35)])
 
-        os.makedirs("graphs", exist_ok=True)
-
         graph_id = str(uuid.uuid4())
         timestamp = datetime.utcnow().isoformat()
-        graph_filename = f"graphs/{graph_id}.html"
-        fig.write_html(graph_filename)
-        print(f"Graph saved to: {graph_filename}")
+        temp_filename = f"/tmp/{graph_id}.html"
+        fig.write_html(temp_filename)
 
+        # Загрузка в GCS с публичным доступом
+        blob = bucket.blob(f"graphs/{graph_id}.html")
+        blob.upload_from_filename(temp_filename)
+        blob.make_public()  # Делаем файл публичным
+        public_url = blob.public_url
+        os.remove(temp_filename)
+
+        # Сохраняем публичный URL в Firestore
         doc_ref = collection.document(graph_id)
-        doc_ref.set({'id': graph_id, 'timestamp': timestamp, 'graph_url': f"/graph/{graph_id}"})
-
+        doc_ref.set({
+            'id': graph_id,
+            'timestamp': timestamp,
+            'graph_url': public_url  # Сохраняем публичный URL вместо /graph/{graph_id}
+        })
+        print(f"Graph uploaded: {public_url}")
         return RedirectResponse(url="/", status_code=303)
 
     except HTTPException as he:
@@ -392,16 +403,14 @@ async def delete_graph(graph_id: str, code: str = Form(...)):
         if not doc.exists:
             raise HTTPException(status_code=404, detail="График не найден в базе данных")
 
+        # Удаление из GCS
+        blob = bucket.blob(f"graphs/{graph_id}.html")
+        if blob.exists():
+            blob.delete()
+            print(f"Graph file {graph_id}.html deleted from GCS.")
+
         doc_ref.delete()
         print(f"Document {graph_id} deleted from Firestore.")
-
-        graph_filename = f"graphs/{graph_id}.html"
-        if os.path.exists(graph_filename):
-            os.remove(graph_filename)
-            print(f"File {graph_filename} deleted from disk.")
-        else:
-            print(f"Warning: Graph file {graph_filename} not found on disk, but removed from Firestore.")
-
         return RedirectResponse(url="/", status_code=303)
 
     except HTTPException as he:
@@ -414,17 +423,16 @@ async def delete_graph(graph_id: str, code: str = Form(...)):
 @app.get("/graph/{graph_id}")
 async def get_graph(graph_id: str):
     try:
-        doc_ref = collection.document(graph_id).get()  # Исправлено: явно присваиваем результат
-        doc = doc_ref  # Убедимся, что doc определён
+        doc_ref = collection.document(graph_id)
+        doc = doc_ref.get()
         if not doc.exists:
             raise HTTPException(status_code=404, detail="График не найден в базе данных")
-        graph_filename = f"graphs/{graph_id}.html"
-        if not os.path.exists(graph_filename):
-            raise HTTPException(status_code=500, detail=f"Файл графика '{graph_id}.html' не найден на сервере. Возможно, он был удален или не был сохранен.")
-        with open(graph_filename, 'r', encoding='utf-8') as f:
-            content = f.read()
-            print(f"Returning graph content for {graph_id}, length: {len(content)}")
-            return HTMLResponse(content=content)
+        data = doc.to_dict()
+        public_url = data.get('graph_url')
+        if not public_url:
+            raise HTTPException(status_code=500, detail="Публичный URL графика не найден в Firestore")
+        # Перенаправляем на публичный URL
+        return RedirectResponse(url=public_url)
     except HTTPException as he:
         print(f"HTTP Error in get_graph: {he.detail}")
         raise he
