@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 import pandas as pd
 import plotly.express as px
 import numpy as np
-from google.cloud import firestore # Остается
+from google.cloud import firestore
 import uuid
 import io
 import os
@@ -12,18 +12,22 @@ import threading
 import time
 import requests
 from contextlib import asynccontextmanager
+import json # НОВЫЙ ИМПОРТ
+from google.oauth2 import service_account # НОВЫЙ ИМПОРТ
 
 # Глобальная константа для секретного кода
 SECRET_CODE = "1701"
 
 def keep_alive():
+    # keep_alive теперь не нужен на Render, так как Render не "усыпляет" сервисы
+    # Но если вы хотите оставить его для внутреннего пинга, то на Render порт будет 10000
+    # и обращаться нужно будет к http://localhost:10000/
+    # Сейчас эта функция будет печатать сообщение, но фактический пинг на 127.0.0.1:8080 не сработает
     while True:
         time.sleep(240)
         try:
-            requests.get("http://127.0.0.1:8080/")
-            print(f"[{datetime.now()}] Keep-alive ping sent.")
-        except requests.exceptions.ConnectionError:
-            print(f"[{datetime.now()}] Keep-alive: Connection error, server might be starting or stopping.")
+            # requests.get("http://localhost:10000/") # Пример для Render
+            print(f"[{datetime.now()}] Keep-alive ping sent (will not function correctly on Render without adjusting URL).")
         except Exception as e:
             print(f"[{datetime.now()}] Keep-alive error: {e}")
 
@@ -37,18 +41,33 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# --- ИЗМЕНЕННАЯ СТРОКА ДЛЯ АУТЕНТИФИКАЦИИ FIRESTORE ---
-# Теперь Firestore Client будет использовать учетные данные сервисного аккаунта Cloud Run
-db = firestore.Client(database='superpcdatab')
-# --- КОНЕЦ ИЗМЕНЕНИЯ ---
+# --- ИЗМЕНЕННАЯ ЛОГИКА АУТЕНТИФИКАЦИИ FIRESTORE ДЛЯ RENDER ---
+try:
+    # Получаем содержимое JSON-ключа из переменной окружения
+    # Переменная окружения будет называться GCP_SERVICE_ACCOUNT_KEY
+    gcp_service_account_info_json_str = os.environ.get("GCP_SERVICE_ACCOUNT_KEY")
+    if not gcp_service_account_info_json_str:
+        raise ValueError("Environment variable GCP_SERVICE_ACCOUNT_KEY is not set.")
+
+    gcp_service_account_info = json.loads(gcp_service_account_info_json_str)
+    credentials = service_account.Credentials.from_service_account_info(gcp_service_account_info)
+    db = firestore.Client(credentials=credentials, database='superpcdatab')
+    print("Firestore client initialized using environment variable on Render.")
+except Exception as e:
+    print(f"FATAL ERROR: Could not initialize Firestore client from environment variable: {e}")
+    # Важно: если на Render переменная не будет настроена, приложение упадет здесь.
+    # В локальной разработке можно использовать GOOGLE_APPLICATION_CREDENTIALS
+    # db = firestore.Client(database='superpcdatab') # Если оставить эту строку, приложение может запуститься, но Firestore не будет работать
+    raise Exception(f"Failed to initialize Firestore: {e}. Ensure GCP_SERVICE_ACCOUNT_KEY env var is set correctly.")
+# --- КОНЕЦ ИЗМЕНЕНИЯ АУТЕНТИФИКАЦИИ ---
 
 collection = db.collection('supercomputer_graphs')
 
 @app.get("/", response_class=HTMLResponse)
 async def get_home():
-    # ТОЧНЫЕ ССЫЛКИ НА ИЗОБРАЖЕНИЯ (ПЕРЕПРОВЕРЕНО ВРУЧНУЮ И ОСТАВЛЕНО ТОЧНО КАК ВЫ ДАЛИ)
+    # ТОЧНЫЕ ССЫЛКИ НА ИЗОБРАЖЕНИЯ (ПЕРЕПРОВЕРЕНО ВРУЧНУЮ)
     image_url1 = "https://previews.dropbox.com/p/thumb/ACsXIJT6uDu3_9KF1hr8G0MW90EFfUZH1nfIjdZCqgmVEqfr41XrwcPUuah8TnkAu64d9LoQ4LxLq8Pv_C38A44qB6L2jGhSXWUi1ZxKjEfxXl5DSrH7X_2tJ1q0rHf7kJwsCAgZbKhSFEmiHWwklx3oXUHaMeKW0gFg6EQNb5Gy09keMAezN8TPgXishPeEesLpbRgUVXDecdbAIYSabJND6u6VcAHsVixsyZ2ITFZE5YNXS_AJaKi2fRFtd8OFOUMwPz56BkTcOnwiulsYerjTCUCJ8cVTdY7aOzfOqxYqVfBJXXRup7t11rsEkZrIk9A/p.png"
-    image_url2 = "https://previews.dropbox.com/p/thumb/ACvr2J7HqCiwFEp0LlCa55sCjdwUd_6XszKMD0kBcbjuSbxaWYHMuhITYEcVATsZNlNPOEX4mXANgJ_2ZwcZeGn9iPyubpllPLiWHkN60b0A9jSJRyCOMpcrwkzNqY0frwIpPvI8YNecE2sUElA5bcVLANYIrt-MYCiCy9E_6r7h6LABMArCl0LV-SNi-dttrGv0FTe-Uv40zL-JoFaAMB7yyL1FQTiv-5Mmi4Aeeu9ucgIJ-tnM_64k6-mXrICOS7VMTOkX7kliBSj_6jge1GgsnCxX_798GwNbDioQxdNdc8uGe3cKnK2PDZmvsXs6VH4D-TVP6djK27PgEYIsPoh5/p.png"
+    image_url2 = "https://previews.dropbox.com/p/thumb/ACvr2J7HqCiwFEp0LlCa55sCjdwUd_6XszKMD0kBcbjuSbxaWYHMuhITYEcVATsZNlNPOEX4mXANgJ_2ZwcZeGn9iPyubpllPLiWHkN60b0A9jJLRyCOMpcrwkzNqY0frwIpPvI8YNecE2sUElA5bcVLANYIrt-MYCiCy9E_6r7h6LABMArCl0LV-SNi-dttrGv0FTe-Uv40zL-JoFaAMB7yyL1FQTiv-5mmi4Aeeu9ucgIJ-tnM_64k6-mXrICOS7VMTOkX7kliBSj_6jge1GgsnCxX_798GwNbDioQxdNdc8uGe3cKnK2PDZmvsXs6VH4D-TVP6djK27PgEYIsPoh5/p.png"
 
     html_header = f"""
     <html>
@@ -83,7 +102,7 @@ async def get_home():
                 .modal-buttons button {{ background: rgba(0,0,0,0.5); border: none; color: white; cursor: pointer; padding: 15px; border-radius: 50%; font-size: 20px; transition: background-color 0.3s ease; }}
                 .modal-buttons button:hover {{ background: rgba(0,0,0,0.8); }}
                 .close-button {{ position: absolute; top: 20px; right: 30px; color: white; font-size: 35px; font-weight: bold; cursor: pointer; z-index: 1060; }}
-                .close-button:hover, .close-button:focus {{ color: #bbb; text-decoration: none; cursor: pointer; }}
+                .close-button:hover, .close-button:focus {{ color: #bbb; text-decoration: none; cursor: }}
 
                 /* Стили для модального окна с кодом */
                 .code-modal-content {{
@@ -384,7 +403,6 @@ async def get_home():
     </html>
     """
 
-# Собираем весь HTML
     return HTMLResponse(content=html_header + list_items + html_footer)
 
 
@@ -397,7 +415,6 @@ async def get_graph_ids_api():
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...), code: str = Form(...)):
-    # Проверка секретного кода
     if code != SECRET_CODE:
         raise HTTPException(status_code=401, detail="Неверный код доступа")
 
@@ -465,12 +482,10 @@ async def upload_file(file: UploadFile = File(...), code: str = Form(...)):
 
 @app.delete("/graph/{graph_id}")
 async def delete_graph(graph_id: str, code: dict):
-    # Проверка секретного кода
     if code.get('code') != SECRET_CODE:
         raise HTTPException(status_code=401, detail="Неверный код доступа")
 
     try:
-        # Удаление из Firestore
         doc_ref = collection.document(graph_id)
         doc = doc_ref.get()
         if not doc.exists:
@@ -479,7 +494,6 @@ async def delete_graph(graph_id: str, code: dict):
         doc_ref.delete()
         print(f"Document {graph_id} deleted from Firestore.")
 
-        # Удаление HTML-файла
         graph_filename = f"graphs/{graph_id}.html"
         if os.path.exists(graph_filename):
             os.remove(graph_filename)
