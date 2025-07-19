@@ -67,7 +67,7 @@ collection = db.collection('supercomputer_graphs')
 async def get_home():
     # ТОЧНЫЕ ССЫЛКИ НА ИЗОБРАЖЕНИЯ (ПЕРЕПРОВЕРЕНО ВРУЧНУЮ)
     image_url1 = "https://previews.dropbox.com/p/thumb/ACsXIJT6uDu3_9KF1hr8G0MW90EFfUZH1nfIjdZCqgmVEqfr41XrwcPUuah8TnkAu64d9LoQ4LxLq8Pv_C38A44qB6L2jGhSXWUi1ZxKjEfxXl5DSrH7X_2tJ1q0rHf7kJwsCAgZbKhSFEmiHWwklx3oXUHaMeKW0gFg6EQNb5Gy09keMAezN8TPgXishPeEesLpbRgUVXDecdbAIYSabJND6u6VcAHsVixsyZ2ITFZE5YNXS_AJaKi2fRFtd8OFOUMwPz56BkTcOnwiulsYerjTCUCJ8cVTdY7aOzfOqxYqVfBJXXRup7t11rsEkZrIk9A/p.png"
-    image_url2 = "https://previews.dropbox.com/p/thumb/ACvr2J7HqCiwFEp0LlCa55sCjdwUd_6XszKMD0kBcbjuSbxaWYHMuhITYEcVATsZNlNPOEX4mXANgJ_2ZwcZeGn9iPyubpllPLiWHkN60b0A9jJLRyCOMpcrwkzNqY0frwIpPvI8YNecE2sUElA5bcVLANYIrt-MYCiCy9E_6r7h6LABMArCl0LV-SNi-dttrGv0FTe-Uv40zL-JoFaAMB7yyL1FQTiv-5mmi4Aeeu9ucgIJ-tnM_64k6-mXrICOS7VMTOkX7kliBSj_6jge1GgsnCxX_798GwNbDioQxdNdc8uGe3cKnK2PDZmvsXs6VH4D-TVP6djK27PgEYIsPoh5/p.png"
+    image_url2 = "https://previews.dropbox.com/p/thumb/ACvr2J7HqCiwFEp0LlCa55sCjdwUd_6XszKMD0kBcbjuSbxaWYHMuhITYEcVATsZNlNPOEX4mXANgJ_2ZwcZeGn9iPyubpllPLiWHkN60b0A9jSJRyCOMpcrwkzNqY0frwIpPvI8YNecE2sUElA5bcVLANYIrt-MYCiCy9E_6r7h6LABMArCl0LV-SNi-dttrGv0FTe-Uv40zL-JoFaAMB7yyL1FQTiv-5Mmi4Aeeu9ucgIJ-tnM_64k6-mXrICOS7VMTOkX7kliBSj_6jge1GgsnCxX_798GwNbDioQxdNdc8uGe3cKnK2PDZmvsXs6VH4D-TVP6djK27PgEYIsPoh5/p.png"
 
     html_header = f"""
     <html>
