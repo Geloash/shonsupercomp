@@ -33,7 +33,6 @@ app = FastAPI()
 
 @app.get("/", response_class=HTMLResponse)
 async def get_home():
-    # Твои рабочие ссылки на картинки
     image_url1 = "https://previews.dropbox.com/p/thumb/ACsXIJT6uDu3_9KF1hr8G0MW90EFfUZH1nfIjdZCqgmVEqfr41XrwcPUuah8TnkAu64d9LoQ4LxLq8Pv_C38A44qB6L2jGhSXWUi1ZxKjEfxXl5DSrH7X_2tJ1q0rHf7kJwsCAgZbKhSFEmiHWwklx3oXUHaMeKW0gFg6EQNb5Gy09keMAezN8TPgXishPeEesLpbRgUVXDecdbAIYSabJND6u6VcAHsVixsyZ2ITFZE5YNXS_AJaKi2fRFtd8OFOUMwPz56BkTcOnwiulsYerjTCUCJ8cVTdY7aOzfOqxYqVfBJXXRup7t11rsEkZrIk9A/p.png"
     image_url2 = "https://previews.dropbox.com/p/thumb/ACvr2J7HqCiwFEp0LlCa55sCjdwUd_6XszKMD0kBcbjuSbxaWYHMuhITYEcVATsZNlNPOEX4mXANgJ_2ZwcZeGn9iPyubpllPLiWHkN60b0A9jSJRyCOMpcrwkzNqY0frwIpPvI8YNecE2sUElA5bcVLANYIrt-MYCiCy9E_6r7h6LABMArCl0LV-SNi-dttrGv0FTe-Uv40zL-JoFaAMB7yyL1FQTiv-5Mmi4Aeeu9ucgIJ-tnM_64k6-mXrICOS7VMTOkX7kliBSj_6jge1GgsnCxX_798GwNbDioQxdNdc8uGe3cKnK2PDZmvsXs6VH4D-TVP6djK27PgEYIsPoh5/p.png"
 
@@ -250,7 +249,7 @@ async def get_home():
                     modal.style.display = "flex";
                     modalImage.src = imageUrl;
                     document.body.style.overflow = 'hidden';
-                    console.log("Opening modal with image:", imageUrl); // Отладка
+                    console.log("Opening modal with image:", imageUrl);
                 }
                 function closeModal() {
                     var modal = document.getElementById("myModal");
@@ -267,12 +266,18 @@ async def get_home():
                     var graphContent = document.getElementById("graphContent");
                     if (currentGraphIndex >= 0 && currentGraphIndex < graphIds.length) {
                         fetch(`/graph/${graphIds[currentGraphIndex]}`)
-                            .then(response => response.text())
+                            .then(response => {
+                                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                                return response.text();
+                            })
                             .then(html => {
                                 graphContent.srcdoc = html;
                                 modal.style.display = "flex";
+                                console.log("Graph loaded successfully for ID:", graphIds[currentGraphIndex]);
                             })
                             .catch(error => console.error('Error loading graph:', error));
+                    } else {
+                        console.log("Invalid graph index:", currentGraphIndex);
                     }
                 }
                 function changeGraph(direction) {
@@ -363,6 +368,7 @@ async def upload_file(file: UploadFile = File(...), code: str = Form(...)):
         timestamp = datetime.utcnow().isoformat()
         graph_filename = f"graphs/{graph_id}.html"
         fig.write_html(graph_filename)
+        print(f"Graph saved to: {graph_filename}")
 
         doc_ref = collection.document(graph_id)
         doc_ref.set({'id': graph_id, 'timestamp': timestamp, 'graph_url': f"/graph/{graph_id}"})
@@ -408,14 +414,17 @@ async def delete_graph(graph_id: str, code: str = Form(...)):
 @app.get("/graph/{graph_id}")
 async def get_graph(graph_id: str):
     try:
-        doc_ref = collection.document(graph_id).get()
+        doc_ref = collection.document(graph_id).get()  # Исправлено: явно присваиваем результат
+        doc = doc_ref  # Убедимся, что doc определён
         if not doc.exists:
             raise HTTPException(status_code=404, detail="График не найден в базе данных")
         graph_filename = f"graphs/{graph_id}.html"
         if not os.path.exists(graph_filename):
             raise HTTPException(status_code=500, detail=f"Файл графика '{graph_id}.html' не найден на сервере. Возможно, он был удален или не был сохранен.")
         with open(graph_filename, 'r', encoding='utf-8') as f:
-            return HTMLResponse(content=f.read())
+            content = f.read()
+            print(f"Returning graph content for {graph_id}, length: {len(content)}")
+            return HTMLResponse(content=content)
     except HTTPException as he:
         print(f"HTTP Error in get_graph: {he.detail}")
         raise he
