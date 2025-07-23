@@ -358,9 +358,9 @@ async def upload_file(file: UploadFile = File(...), code: str = Form(...)):
 
         current_year = datetime.now().year
         fig = px.scatter(df, x='Supercomputer', y='EFLOPS', size='Power (GW)', text='EFLOPS',
-                        hover_data=['Label', 'Units'],
-                        size_max=60,
-                        title=f'Сравнение суперкомпьютеров ({current_year})')
+                         hover_data=['Label', 'Units'],
+                         size_max=60,
+                         title=f'Сравнение суперкомпьютеров ({current_year})')
         fig.update_traces(textposition='top center')
         fig.update_yaxes(type='log', range=[np.log10(0.1), np.log10(35)])
 
@@ -368,22 +368,24 @@ async def upload_file(file: UploadFile = File(...), code: str = Form(...)):
         timestamp = datetime.utcnow().isoformat()
         temp_filename = f"/tmp/{graph_id}.html"
         fig.write_html(temp_filename)
+        print(f"Local HTML saved to: {temp_filename}") # <--- НОВАЯ ОТЛАДОЧНАЯ СТРОКА
 
         # Загрузка в GCS
         blob = bucket.blob(f"graphs/{graph_id}.html")
-        print(f"Uploading to: graphs/{graph_id}.html")
+        print(f"Attempting GCS upload to: gs://{bucket_name}/graphs/{graph_id}.html") # <--- НОВАЯ ОТЛАДОЧНАЯ СТРОКА
         try:
             blob.upload_from_filename(temp_filename)
-            print(f"Uploaded, checking existence: {blob.exists()}")
+            print(f"Successfully uploaded, checking existence in GCS: {blob.exists()}") # <--- Изменено для ясности
             blob.make_public()
             public_url = blob.public_url
-            print(f"Public URL: {public_url}")
+            print(f"Public URL for GCS object: {public_url}") # <--- Изменено для ясности
         except Exception as e:
-            print(f"Error uploading to GCS: {str(e)}")
+            print(f"FATAL GCS UPLOAD ERROR: {str(e)}") # <--- Изменено для ясности
             raise HTTPException(status_code=500, detail=f"Ошибка загрузки в GCS: {str(e)}")
 
         # Удаление временного файла
         os.remove(temp_filename)
+        print(f"Local temp file removed: {temp_filename}") # <--- НОВАЯ ОТЛАДОЧНАЯ СТРОКА
 
         # Сохранение в Firestore
         doc_ref = collection.document(graph_id)
@@ -392,14 +394,14 @@ async def upload_file(file: UploadFile = File(...), code: str = Form(...)):
             'timestamp': timestamp,
             'graph_url': public_url
         })
-        print(f"Graph uploaded: {public_url}")
+        print(f"Firestore document created for graph ID: {graph_id} with URL: {public_url}") # <--- НОВАЯ ОТЛАДОЧНАЯ СТРОКА
         return RedirectResponse(url="/", status_code=303)
 
     except HTTPException as he:
         print(f"HTTP Error: {he.detail}")
         raise he
     except Exception as e:
-        print(f"Error during upload: {str(e)}")
+        print(f"General Error during upload: {str(e)}") # <--- Изменено для ясности
         raise HTTPException(status_code=500, detail=f"Произошла ошибка при загрузке или обработке файла: {str(e)}")
 
 @app.delete("/graph/{graph_id}")
