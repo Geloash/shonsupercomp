@@ -371,10 +371,13 @@ async def upload_file(file: UploadFile = File(...), code: str = Form(...)):
 
         # Загрузка в GCS с публичным доступом
         blob = bucket.blob(f"graphs/{graph_id}.html")
-        blob.upload_from_filename(temp_filename)
-        blob.make_public()  # Делаем файл публичным
-        public_url = blob.public_url
-        os.remove(temp_filename)
+print(f"Uploading to: graphs/{graph_id}.html")
+blob.upload_from_filename(temp_filename)
+print(f"Uploaded, checking existence: {blob.exists()}")
+blob.make_public()
+public_url = blob.public_url
+print(f"Public URL: {public_url}")
+os.remove(temp_filename)
 
         # Сохраняем публичный URL в Firestore
         doc_ref = collection.document(graph_id)
