@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY main.py .
 
 # Создаем директорию 'graphs' для сохранения графиков
-RUN mkdir -p graphs
+RUN mkdir -p graphs/
 
 # Определяем переменную окружения PORT, которую будет использовать Uvicorn
 # Cloud Run предоставит порт через эту переменную
