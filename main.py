@@ -320,11 +320,21 @@ async def get_graph_ids_api():
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
-    # ... (предобработка CSV и генерация графика)
+    # Предобработка CSV и генерация графика (твой существующий код)
+    csv_data = pd.read_csv(io.StringIO(file.file.read().decode("utf-8")))
+    print("DataFrame before cleaning:", csv_data.info(), csv_data, sep="\n")
+    # Очистка данных (если есть)
+    cleaned_data = csv_data.dropna()  # Пример очистки
+    print("DataFrame after cleaning:", cleaned_data.info(), cleaned_data, sep="\n")
+
+    # Генерация графика (твой код с Plotly)
+    fig = px.bar(cleaned_data, x="Supercomputer", y="EFLOPS", 
+                 title="Суперкомпьютеры по производительности (EFLOPS)",
+                 labels={"EFLOPS": "Производительность (EFLOPS)", "Supercomputer": "Суперкомпьютер"},
+                 hover_data=["Power (GW)", "Units", "Label"])
     graph_id = str(uuid.uuid4())
     temp_filename = f"/tmp/{graph_id}.html"
-    with open(temp_filename, "w", encoding="utf-8") as f:
-        f.write(html_content)
+    fig.write_html(temp_filename)
 
     # Загрузка в GCS с публичным доступом
     blob = bucket.blob(f"graphs/{graph_id}.html")
@@ -338,14 +348,15 @@ async def upload_file(file: UploadFile = File(...)):
     except Exception as e:
         print(f"Error uploading to GCS: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ошибка загрузки в GCS: {str(e)}")
-    os.remove(temp_filename)
+    finally:
+        os.remove(temp_filename)  # Удаляем временный файл в любом случае
 
-    # Сохраняем публичный URL в Firestore
+    # Сохранение в Firestore
     doc_ref = collection.document(graph_id)
     doc_ref.set({
         "graph_url": public_url,
         "timestamp": firestore.SERVER_TIMESTAMP,
-        "user_id": "anonymous"  # Можно заменить на реальный user_id
+        "user_id": "anonymous"  # Замени на реальный user_id, если нужно
     })
     return RedirectResponse(url="/", status_code=303)
 
