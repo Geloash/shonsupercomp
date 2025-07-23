@@ -319,78 +319,35 @@ async def get_graph_ids_api():
     return {"graph_ids": graph_ids}
 
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...), code: str = Form(...)):
-    if code != SECRET_CODE:
-        raise HTTPException(status_code=401, detail="Неверный код доступа")
+async def upload_file(file: UploadFile = File(...)):
+    # ... (предобработка CSV и генерация графика)
+    graph_id = str(uuid.uuid4())
+    temp_filename = f"/tmp/{graph_id}.html"
+    with open(temp_filename, "w", encoding="utf-8") as f:
+        f.write(html_content)
+
+    # Загрузка в GCS с публичным доступом
+    blob = bucket.blob(f"graphs/{graph_id}.html")
+    print(f"Uploading to: graphs/{graph_id}.html")
     try:
-        if not file.filename.endswith('.csv'):
-            raise HTTPException(status_code=400, detail="Только CSV файлы разрешены")
+        blob.upload_from_filename(temp_filename)
+        print(f"Uploaded, checking existence: {blob.exists()}")
+        blob.make_public()
+        public_url = blob.public_url
+        print(f"Public URL: {public_url}")
+    except Exception as e:
+        print(f"Error uploading to GCS: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки в GCS: {str(e)}")
+    os.remove(temp_filename)
 
-        content = await file.read()
-        df = pd.read_csv(io.BytesIO(content))
-
-        print("DataFrame before cleaning:")
-        print(df.info())
-        print(df.head())
-
-        required_columns = ['Supercomputer', 'EFLOPS', 'Power (GW)', 'Units', 'Label']
-        if not all(col in df.columns for col in required_columns):
-            missing_cols = [col for col in required_columns if col not in df.columns]
-            raise HTTPException(status_code=400, detail=f"Неверная структура CSV. Отсутствуют колонки: {', '.join(missing_cols)}. Требуются: " + ", ".join(required_columns))
-
-        if 'EFLOPS' in df.columns:
-            df['EFLOPS'] = pd.to_numeric(df['EFLOPS'], errors='coerce')
-        if 'Power (GW)' in df.columns:
-            df['Power (GW)'] = pd.to_numeric(df['Power (GW)'], errors='coerce')
-
-        initial_rows = len(df)
-        df.dropna(subset=['EFLOPS', 'Power (GW)'], inplace=True)
-        dropped_rows_critical = initial_rows - len(df)
-        if dropped_rows_critical > 0:
-            print(f"Dropped {dropped_rows_critical} rows due to missing/invalid EFLOPS or Power (GW).")
-
-        if 'Units' in df.columns:
-            df['Units'] = df['Units'].fillna('')
-
-        print("DataFrame after cleaning:")
-        print(df.info())
-        print(df.head())
-
-        current_year = datetime.now().year
-        fig = px.scatter(df, x='Supercomputer', y='EFLOPS', size='Power (GW)', text='EFLOPS',
-                         hover_data=['Label', 'Units'],
-                         size_max=60,
-                         title=f'Сравнение суперкомпьютеров ({current_year})')
-        fig.update_traces(textposition='top center')
-        fig.update_yaxes(type='log', range=[np.log10(0.1), np.log10(35)])
-
-        graph_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat()
-        temp_filename = f"/tmp/{graph_id}.html"
-        fig.write_html(temp_filename)
-
-        # Загрузка в GCS с публичным доступом
-blob = bucket.blob(f"graphs/{graph_id}.html")
-print(f"Uploading to: graphs/{graph_id}.html")
-try:
-    blob.upload_from_filename(temp_filename)
-    print(f"Uploaded, checking existence: {blob.exists()}")
-    blob.make_public()
-    public_url = blob.public_url
-    print(f"Public URL: {public_url}")
-except Exception as e:
-    print(f"Error uploading to GCS: {str(e)}")
-    raise
-os.remove(temp_filename)
-# Сохраняем публичный URL в Firestore
-        doc_ref = collection.document(graph_id)
-        doc_ref.set({
-            'id': graph_id,
-            'timestamp': timestamp,
-            'graph_url': public_url  # Сохраняем публичный URL вместо /graph/{graph_id}
-        })
-        print(f"Graph uploaded: {public_url}")
-        return RedirectResponse(url="/", status_code=303)
+    # Сохраняем публичный URL в Firestore
+    doc_ref = collection.document(graph_id)
+    doc_ref.set({
+        "graph_url": public_url,
+        "timestamp": firestore.SERVER_TIMESTAMP,
+        "user_id": "anonymous"  # Можно заменить на реальный user_id
+    })
+    return RedirectResponse(url="/", status_code=303)
 
     except HTTPException as he:
         print(f"HTTP Error: {he.detail}")
