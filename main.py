@@ -23,7 +23,7 @@ try:
     credentials = service_account.Credentials.from_service_account_info(gcp_service_account_info)
     db = firestore.Client(credentials=credentials, database='superpcdatab')
     storage_client = storage.Client(credentials=credentials)
-    bucket_name = "supercomputer-graphs-123"  # Замени на имя твоего бакета
+    bucket_name = "supercomputers-data"
     bucket = storage_client.bucket(bucket_name)
     print("Firestore and GCS clients initialized.")
 except Exception as e:
