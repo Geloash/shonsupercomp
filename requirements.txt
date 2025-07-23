@@ -4,4 +4,7 @@ pandas==2.2.2
 plotly==5.22.0
 numpy==1.26.4
 google-cloud-firestore==2.14.0
+google-cloud-storage
+google-auth
+google-auth-oauthlib
 requests==2.32.3
