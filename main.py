@@ -374,9 +374,14 @@ async def upload_file(file: UploadFile = File(...), code: str = Form(...)):
         blob = bucket.blob(f"graphs/{graph_id}.html")
         print(f"Attempting GCS upload to: gs://{bucket_name}/graphs/{graph_id}.html") # <--- НОВАЯ ОТЛАДОЧНАЯ СТРОКА
         try:
+            blob.upload_from_filename(temp_filename)
+            print(f"Successfully uploaded, checking existence in GCS: {blob.exists()}")
         except Exception as e:
             print(f"FATAL GCS UPLOAD ERROR: {str(e)}") # <--- Изменено для ясности
             raise HTTPException(status_code=500, detail=f"Ошибка загрузки в GCS: {str(e)}")
+
+        public_url = blob.public_url
+        print(f"Public URL for GCS object: {public_url}")
 
         # Удаление временного файла
         os.remove(temp_filename)
